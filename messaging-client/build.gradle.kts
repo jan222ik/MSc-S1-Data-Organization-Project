@@ -10,6 +10,8 @@ kotlin {
         named("jvmMain") {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
+                implementation("br.com.devsrsouza:redissed:1.1.0")
+                implementation("redis.clients:jedis:2.10.2")
             }
         }
     }
