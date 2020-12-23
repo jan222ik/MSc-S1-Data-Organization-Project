@@ -1,21 +1,39 @@
 package messaging_api
 
+import kotlinx.coroutines.delay
+import org.litote.kmongo.coroutine.CoroutineClient
+import org.litote.kmongo.coroutine.CoroutineCollection
 import org.litote.kmongo.coroutine.coroutine
 import org.litote.kmongo.reactivestreams.KMongo
+import java.io.Closeable
+import java.time.LocalDateTime
 
-class MongoHandler {
+class MongoHandler : Closeable {
 
-    private lateinit var col: String
+    private val client: CoroutineClient = KMongo.createClient().coroutine
+    private val col: CoroutineCollection<Message>
 
     init {
-        val client = KMongo.createClient().coroutine //use coroutine extension
         val database = client.getDatabase("messagehistory") //normal java driver usage
-        //val col = database.getCollection<Message>() //KMongo extension method
-        database.getCollection("messages", Message::class.java).coroutine
+        col = database.getCollection("messages") //KMongo extension method
     }
 
-    suspend fun pushMessage(msg: Message) {
-        col.insertOne(Jedi("Luke Skywalker", 19))
-        val yoda : Jedi? = col.findOne(Jedi::name eq "Yoda")
+    suspend fun getHistory(): List<Message> = col.find().toList().sortedBy { it.timestamp }
+
+    suspend fun pushMessage(msg: Message) = col.insertOne(msg)
+
+    override fun close() {
+        client.close()
+    }
+
+}
+
+suspend fun main() {
+    MongoHandler().apply {
+        pushMessage(Message("test", LocalDateTime.now(), Author("Janik", "@@@@")))
+        delay(2000)
+        getHistory().forEach {
+            println(it)
+        }
     }
 }

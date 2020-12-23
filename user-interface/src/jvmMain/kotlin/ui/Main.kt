@@ -58,9 +58,9 @@ fun main(args: Array<String>) {
         val messages = api.messagesStateFlow.collectAsState(emptyList())
 
         val userInConversation = remember(messages.value) {
-            val set = mutableSetOf<Author>()
-            set.addAll(messages.value.map { it.author })
-            mutableStateListOf(*set.toTypedArray())
+            val map = mutableMapOf<String, Author>()
+            map.putAll(messages.value.map { it.author.email to it.author })
+            mutableStateListOf(*map.values.toTypedArray())
         }
 
         MaterialTheme(
