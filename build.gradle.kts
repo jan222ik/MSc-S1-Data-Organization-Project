@@ -15,9 +15,11 @@ buildscript {
         // __KOTLIN_COMPOSE_VERSION__
         classpath(kotlin("gradle-plugin", version = "1.4.20"))
     }
+
 }
 
 allprojects {
+
     repositories {
         google()
         jcenter()
