@@ -3,17 +3,15 @@ package messaging_api.impl
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import messaging_api.Author
 import messaging_api.IMessagingAPI
 import messaging_api.LettuceHandler
 import messaging_api.Message
 import java.io.Closeable
-import java.time.LocalDateTime
 
 
-object LettuceImpl : IMessagingAPI, Closeable {
+object DatabaseImpl : IMessagingAPI, Closeable {
 
-    private val handler = LettuceHandler()
+    private val redisHandler = LettuceHandler()
 
     private val internalMessageStateFlow = MutableStateFlow<List<Message>>(listOf())
 
@@ -21,7 +19,7 @@ object LettuceImpl : IMessagingAPI, Closeable {
         get() = internalMessageStateFlow
 
     init {
-        handler.connect(
+        redisHandler.connect(
             onNextMessage = {
                 val gson = Gson()
                 val msg = gson.fromJson(it, Message::class.java)
@@ -32,11 +30,11 @@ object LettuceImpl : IMessagingAPI, Closeable {
     }
 
     override suspend fun sendMessage(msg: Message) {
-        handler.sendMessage(msg)
+        redisHandler.sendMessage(msg)
     }
 
     override fun close() {
-        handler.close()
+        redisHandler.close()
     }
 
 

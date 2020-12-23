@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChangeHistory
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Send
@@ -32,8 +31,7 @@ import kotlinx.coroutines.launch
 import messaging_api.Author
 import messaging_api.IMessagingAPI
 import messaging_api.Message
-import messaging_api.impl.DemoMsg
-import messaging_api.impl.LettuceImpl
+import messaging_api.impl.DatabaseImpl
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -51,7 +49,7 @@ fun main(args: Array<String>) {
             appWindow?.setTitle("Client: $name")
         }
 
-        val api: IMessagingAPI = LettuceImpl
+        val api: IMessagingAPI = DatabaseImpl
         onActive {
             onDispose {
                 api.close()
