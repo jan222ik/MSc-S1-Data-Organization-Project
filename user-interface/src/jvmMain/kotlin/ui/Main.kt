@@ -17,11 +17,7 @@ import androidx.compose.material.icons.filled.ChangeHistory
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +27,12 @@ import androidx.compose.ui.platform.AmbientDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import messaging_api.Author
+import messaging_api.IMessagingAPI
+import messaging_api.Message
+import messaging_api.impl.DemoMsg
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -40,6 +42,7 @@ fun main(args: Array<String>) {
         size = IntSize(640, 1080),
     ) {
         val (clientName, setClientName) = remember { mutableStateOf("") }
+        val (clientEMail, setClientEMail) = remember { mutableStateOf("") }
 
         val appWindow: AppWindow? = AppWindowAmbient.current
         remember(clientName) { // Updates the title of the window when the user changes
@@ -47,20 +50,12 @@ fun main(args: Array<String>) {
             appWindow?.setTitle("Client: $name")
         }
 
-        val messages: SnapshotStateList<Message> = remember {
-            mutableStateListOf(
-                Message("Hello, my name is Holger", LocalDateTime.now(), "Holger"),
-                Message("I'm Hans", LocalDateTime.now(), "Hans"),
-                Message("Nice to meet you all, call me Hugo", LocalDateTime.now(), "Hugo"),
-                Message("Does everyone have the agenda for today?", LocalDateTime.now(), "Holger"),
-                Message("If not please message me", LocalDateTime.now(), "Holger"),
-                Message("Hey.\n Alfons here. I would need a copy.", LocalDateTime.now(), "Alfons"),
-            )
-        }
+        val api: IMessagingAPI = DemoMsg
+        val messages = api.messagesStateFlow.collectAsState(emptyList())
 
-        val userInConversation = remember(messages.firstStateRecord) {
-            val set = mutableSetOf<String>()
-            set.addAll(messages.map { it.author })
+        val userInConversation = remember(messages.value) {
+            val set = mutableSetOf<Author>()
+            set.addAll(messages.value.map { it.author })
             mutableStateListOf(*set.toTypedArray())
         }
 
@@ -75,7 +70,11 @@ fun main(args: Array<String>) {
                 topBar = {
                     ClientTopBar(
                         clientName = clientName,
-                        setClientName = setClientName,
+                        clientEMail = clientEMail,
+                        setAuthorDetails = { name, email ->
+                            setClientName(name)
+                            setClientEMail(email)
+                        },
                         usernames = userInConversation
                     )
                 },
@@ -84,11 +83,13 @@ fun main(args: Array<String>) {
                         val density = AmbientDensity.current
                         val width = with(density) { constraints.maxWidth.toDp() - it.start - it.end }
                         val height = with(density) { constraints.maxHeight.toDp() - it.top - it.bottom }
+                            .takeIf { it.value >= 0 } ?: 0.dp
+
 
                         Box(modifier = Modifier.size(width, height)) {
                             MessageList(
-                                msgs = messages,
-                                clientName = clientName,
+                                msgs = messages.value,
+                                clientEMail = clientEMail,
                                 forceDateTimeDisplay = false
                             )
                         }
@@ -99,9 +100,13 @@ fun main(args: Array<String>) {
                         onSendClicked = {
                             if (it.isNotEmpty()) {
                                 val newMsg = Message(
-                                    content = it, timestamp = LocalDateTime.now(), author = clientName
+                                    content = it,
+                                    timestamp = LocalDateTime.now(),
+                                    author = Author(clientName, clientEMail)
                                 )
-                                messages.add(newMsg)
+                                GlobalScope.launch {
+                                    api.sendMessage(newMsg)
+                                }
                             }
                             true
                         },
@@ -116,71 +121,62 @@ fun main(args: Array<String>) {
 
 @ExperimentalKeyInput
 @Composable
-fun ClientTopBar(clientName: String, setClientName: (String) -> Unit, usernames: List<String>) {
+fun ClientTopBar(
+    clientName: String,
+    clientEMail: String,
+    setAuthorDetails: (String, String) -> Unit,
+    usernames: List<Author>
+) {
     val (isEditName, _) = remember(clientName) { mutableStateOf(clientName.isEmpty()) }
-    val (inputValue, setInputValue) = remember(clientName) { mutableStateOf(clientName) }
+    val (inputNameValue, setInputNameValue) = remember(clientName) { mutableStateOf(clientName) }
+    val (inputEMailValue, setInputEMailValue) = remember(clientEMail) { mutableStateOf(clientEMail) }
 
     Card(
         modifier = Modifier
             .padding(start = 16.dp, end = 16.dp, top = 16.dp)
             .fillMaxWidth()
     ) {
-        val expandedNameListState = remember(clientName) { mutableStateOf(false) }
         Column {
             Box(
                 contentAlignment = Alignment.Center
             ) {
-                Row(modifier = Modifier.height(60.dp)) {
+                Row(
+                    modifier = Modifier
+                    //.height(60.dp)
+                ) {
                     if (isEditName) {
-                        TextField(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .shortcuts {
-                                    on(
-                                        key = Key.Enter,
-                                        callback = { setClientName.invoke(inputValue) }
-                                    )
-                                },
-                            value = inputValue,
-                            onValueChange = {
-                                println("it = ${it}")
-                                setInputValue(it)
-                            },
-                            placeholder = {
-                                Text("Enter a name for this client")
-                            },
-                            backgroundColor = Color.Transparent,
-                            trailingIcon = {
-                                Row {
-                                    Icon(
-                                        modifier = Modifier.clickable {
-                                            expandedNameListState.value = !expandedNameListState.value
-                                        },
-                                        imageVector = Icons.Filled.ChangeHistory
-                                    )
-                                    Icon(
-                                        modifier = Modifier.clickable {
-                                            setClientName.invoke(inputValue)
-                                        },
-                                        imageVector = Icons.Filled.Check
-                                    )
+                        Column {
+                            EnterText(
+                                value = inputNameValue,
+                                onValueChange = setInputNameValue,
+                                placeholderString = "Enter a name for this client",
+                                onApply = {
+                                    setAuthorDetails.invoke(inputNameValue, inputEMailValue)
                                 }
-                            }
-                        )
+                            )
+                            EnterText(
+                                value = inputEMailValue,
+                                onValueChange = setInputEMailValue,
+                                placeholderString = "Enter your e-mail",
+                                onApply = {
+                                    setAuthorDetails.invoke(inputNameValue, inputEMailValue)
+                                }
+                            )
+                        }
                     } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
                             Text(
                                 modifier = Modifier
                                     .padding(start = 16.dp)
                                     .align(Alignment.CenterStart),
-                                text = "Client Name: $clientName"
+                                text = "Client Name: $clientName [$clientEMail]"
                             )
                             Icon(
                                 modifier = Modifier
                                     .padding(end = 16.dp)
                                     .align(Alignment.CenterEnd)
                                     .clickable {
-                                        setClientName.invoke("")
+                                        setAuthorDetails.invoke("", "")
                                     },
                                 imageVector = Icons.Filled.ExitToApp
                             )
@@ -188,7 +184,7 @@ fun ClientTopBar(clientName: String, setClientName: (String) -> Unit, usernames:
                     }
                 }
             }
-            if (expandedNameListState.value) {
+            if (isEditName) {
                 Row(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
@@ -202,16 +198,53 @@ fun ClientTopBar(clientName: String, setClientName: (String) -> Unit, usernames:
                     LazyRowFor(usernames) { item ->
                         Button(
                             onClick = {
-                                setClientName.invoke(item)
+                                setAuthorDetails.invoke(item.name, item.email)
                             }
                         ) {
-                            Text(item)
+                            Text(item.name)
                         }
                     }
                 }
             }
         }
     }
+}
+
+@ExperimentalKeyInput
+@Composable
+fun EnterText(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholderString: String,
+    onApply: () -> Unit
+) {
+    TextField(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shortcuts {
+                on(
+                    key = Key.Enter,
+                    callback = { onApply.invoke() }
+                )
+            },
+        value = value,
+        onValueChange = {
+            println("it = $it")
+            onValueChange(it)
+        },
+        placeholder = {
+            Text(text = placeholderString)
+        },
+        backgroundColor = Color.Transparent,
+        trailingIcon = {
+            Icon(
+                modifier = Modifier.clickable {
+                   onApply.invoke()
+                },
+                imageVector = Icons.Filled.Check
+            )
+        }
+    )
 }
 
 @ExperimentalKeyInput
@@ -264,7 +297,7 @@ fun ComposeMessageBar(onSendClicked: (String) -> Boolean, hasClientName: Boolean
 }
 
 @Composable
-fun MessageList(msgs: List<Message>, clientName: String, forceDateTimeDisplay: Boolean = false) {
+fun MessageList(msgs: List<Message>, clientEMail: String, forceDateTimeDisplay: Boolean = false) {
     val scrollState = rememberScrollState()
     remember(msgs.size) {
         scrollState.scrollTo(scrollState.maxValue)
@@ -276,7 +309,7 @@ fun MessageList(msgs: List<Message>, clientName: String, forceDateTimeDisplay: B
         for (msg in msgs) {
             DisplayMessage(
                 msg = msg,
-                clientName = clientName,
+                clientEMail = clientEMail,
                 isGroupChat = true,
                 forceDateTimeDisplay = forceDateTimeDisplay
             )
@@ -291,12 +324,12 @@ val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("hh:mm")
 @Composable
 fun DisplayMessage(
     msg: Message,
-    clientName: String,
+    clientEMail: String,
     isGroupChat: Boolean = false,
     forceDateTimeDisplay: Boolean = false
 ) {
     val (showDate, setShowDate) = remember { mutableStateOf(forceDateTimeDisplay) }
-    val thisClientAuthor = msg.isThisClientAuthor(clientName)
+    val thisClientAuthor = msg.isThisClientAuthor(clientEMail)
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (thisClientAuthor) Alignment.CenterEnd else Alignment.CenterStart
@@ -326,9 +359,10 @@ fun DisplayMessage(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (showAuthorName) {
+                            val (name, email) = msg.author
                             Text(
                                 modifier = Modifier.align(Alignment.CenterStart),
-                                text = msg.author,
+                                text = "$name [$email]",
                                 style = MaterialTheme.typography.caption,
                                 textAlign = TextAlign.Center
                             )
@@ -353,6 +387,4 @@ fun DisplayMessage(
     }
 }
 
-data class Message(val content: String, val timestamp: LocalDateTime, val author: String) {
-    fun isThisClientAuthor(clientName: String) = author == clientName
-}
+fun Message.isThisClientAuthor(clientEMail: String) = author.email == clientEMail
