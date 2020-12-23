@@ -33,6 +33,7 @@ import messaging_api.Author
 import messaging_api.IMessagingAPI
 import messaging_api.Message
 import messaging_api.impl.DemoMsg
+import messaging_api.impl.LettuceImpl
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -50,7 +51,12 @@ fun main(args: Array<String>) {
             appWindow?.setTitle("Client: $name")
         }
 
-        val api: IMessagingAPI = DemoMsg
+        val api: IMessagingAPI = LettuceImpl
+        onActive {
+            onDispose {
+                api.close()
+            }
+        }
         val messages = api.messagesStateFlow.collectAsState(emptyList())
 
         val userInConversation = remember(messages.value) {

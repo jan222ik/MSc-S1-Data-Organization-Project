@@ -1,14 +1,19 @@
 package messaging_api.impl
 
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import messaging_api.Author
 import messaging_api.IMessagingAPI
+import messaging_api.LettuceHandler
 import messaging_api.Message
-import messaging_api.RedisHandler
+import java.io.Closeable
+import java.time.LocalDateTime
 
-object RedisImpl : IMessagingAPI {
 
-    private val handler = RedisHandler
+object LettuceImpl : IMessagingAPI, Closeable {
+
+    private val handler = LettuceHandler()
 
     private val internalMessageStateFlow = MutableStateFlow<List<Message>>(listOf())
 
@@ -17,15 +22,22 @@ object RedisImpl : IMessagingAPI {
 
     init {
         handler.connect(
-            onNewMessage = {
-                val l = listOf(*internalMessageStateFlow.value.toTypedArray(), it)
+            onNextMessage = {
+                val gson = Gson()
+                val msg = gson.fromJson(it, Message::class.java)
+                val l = listOf(*internalMessageStateFlow.value.toTypedArray(), msg)
                 internalMessageStateFlow.emit(l)
             }
         )
     }
 
     override suspend fun sendMessage(msg: Message) {
-        handler.writeMessage(msg)
+        handler.sendMessage(msg)
     }
+
+    override fun close() {
+        handler.close()
+    }
+
 
 }

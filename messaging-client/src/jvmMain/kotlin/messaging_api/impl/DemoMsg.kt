@@ -34,4 +34,8 @@ object DemoMsg : IMessagingAPI {
         val l = listOf(*internalMessagesStateFlow.value.toTypedArray(), msg)
         internalMessagesStateFlow.emit(l)
     }
+
+    override fun close() {
+
+    }
 }
