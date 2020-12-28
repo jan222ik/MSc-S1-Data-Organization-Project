@@ -46,6 +46,22 @@ class MongoHandler : Closeable {
 
     suspend fun pushMessage(msg: Message) = col.insertOne(msg)
 
+    suspend fun calculateSenderStats(): List<SenderStat> {
+        return col.mapReduce<SenderStat>(
+            """
+                function() {
+                    emit(this.author, 1);
+                };
+            """,
+            """
+                function(author, contents) {
+                    return contents.length;
+                };
+            """
+        ).toList()
+    }
+
+
     override fun close() {
         client.close()
     }
@@ -54,9 +70,14 @@ class MongoHandler : Closeable {
 
 suspend fun main() {
     MongoHandler().apply {
-        pushMessage(Message("test", LocalDateTime.now(), Author("Janik", "@@@@")))
-        delay(2000)
-        getHistory().forEach {
+
+        //pushMessage(Message("test", LocalDateTime.now(), Author("Janik", "@@@@")))
+        //delay(2000)
+        //getHistory().forEach {
+        //    println(it)
+        //}
+
+        calculateSenderStats().forEach {
             println(it)
         }
     }
