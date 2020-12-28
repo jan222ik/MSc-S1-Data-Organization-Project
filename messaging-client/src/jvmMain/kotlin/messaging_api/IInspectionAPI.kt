@@ -6,4 +6,7 @@ interface IInspectionAPI : IMessagingAPI {
     val filteredMessagesStateFlow: StateFlow<List<Message>>
     val hasUpdates: StateFlow<Boolean>
     suspend fun applyFilter(filter: MessageFilter)
+
+    val senderStatsStateFlow: StateFlow<List<SenderStat>>
+    fun calculateSenderStats()
 }

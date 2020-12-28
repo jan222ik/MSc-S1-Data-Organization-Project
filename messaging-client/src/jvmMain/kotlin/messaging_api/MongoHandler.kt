@@ -1,26 +1,29 @@
 package messaging_api
 
-import kotlinx.coroutines.delay
 import org.bson.conversions.Bson
-import org.litote.kmongo.*
+import org.litote.kmongo.and
 import org.litote.kmongo.coroutine.CoroutineClient
 import org.litote.kmongo.coroutine.CoroutineCollection
 import org.litote.kmongo.coroutine.coroutine
+import org.litote.kmongo.div
+import org.litote.kmongo.eq
+import org.litote.kmongo.gte
+import org.litote.kmongo.lte
+import org.litote.kmongo.match
 import org.litote.kmongo.reactivestreams.KMongo
 import java.io.Closeable
-import java.time.LocalDateTime
 
 class MongoHandler : Closeable {
 
     private val client: CoroutineClient = KMongo.createClient().coroutine
-    private val col: CoroutineCollection<Message>
+    private val messageHistoryCol: CoroutineCollection<Message>
 
     init {
-        val database = client.getDatabase("messagehistory") //normal java driver usage
-        col = database.getCollection("messages") //KMongo extension method
+        val database = client.getDatabase("messagehistory")
+        messageHistoryCol = database.getCollection("messages")
     }
 
-    suspend fun getHistory(): List<Message> = col.find().toList().sortedBy { it.timestamp }
+    suspend fun getHistory(): List<Message> = messageHistoryCol.find().toList().sortedBy { it.timestamp }
 
     suspend fun filterMessages(filter: MessageFilter?): List<Message> {
         val pipeline = mutableListOf<Bson>()
@@ -41,13 +44,13 @@ class MongoHandler : Closeable {
                 pipeline.add(match(it))
             }
         }
-        return col.aggregate<Message>(pipeline).toList()
+        return messageHistoryCol.aggregate<Message>(pipeline).toList()
     }
 
-    suspend fun pushMessage(msg: Message) = col.insertOne(msg)
+    suspend fun pushMessage(msg: Message) = messageHistoryCol.insertOne(msg)
 
     suspend fun calculateSenderStats(): List<SenderStat> {
-        return col.mapReduce<SenderStat>(
+        return messageHistoryCol.mapReduce<SenderStat>(
             """
                 function() {
                     emit(this.author, 1);

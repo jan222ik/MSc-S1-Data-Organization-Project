@@ -5,11 +5,34 @@ package ui
 import androidx.compose.desktop.Window
 import androidx.compose.desktop.WindowEvents
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumnFor
+import androidx.compose.material.Card
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedButton
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Surface
+import androidx.compose.material.Tab
+import androidx.compose.material.TabRow
+import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.onActive
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.key.ExperimentalKeyInput
@@ -23,7 +46,9 @@ import kotlinx.coroutines.launch
 import messaging_api.Author
 import messaging_api.IInspectionAPI
 import messaging_api.MessageFilter
+import messaging_api.author
 import messaging_api.impl.DatabaseImpl
+import messaging_api.messageCount
 
 
 @OptIn(ExperimentalKeyInput::class)
@@ -32,7 +57,7 @@ fun main() {
 }
 
 @ExperimentalKeyInput
-fun ChatInspector(location: IntOffset? = null, onClose: (()-> Unit)? = null) {
+fun ChatInspector(location: IntOffset? = null, onClose: (() -> Unit)? = null) {
     Window(
         size = IntSize(640, 1080),
         location = location ?: IntOffset.Zero,
@@ -50,9 +75,117 @@ fun ChatInspector(location: IntOffset? = null, onClose: (()-> Unit)? = null) {
         MaterialTheme(
             colors = darkColors
         ) {
-            FilterScreen(api)
+            //FilterScreen(api)
+            val tabIsSenderStats = remember { mutableStateOf(false) }
+            Scaffold(
+                topBar = {
+                    TabRow(1.takeIf { tabIsSenderStats.value } ?: 0) {
+                        Tab(
+                            selected = tabIsSenderStats.value.not(),
+                            content = { Text("Filter Messages") },
+                            onClick = { tabIsSenderStats.value = false })
+                        Tab(
+                            selected = tabIsSenderStats.value,
+                            content = { Text("Sender Stats") },
+                            onClick = { tabIsSenderStats.value = true })
+                    }
+                },
+                bodyContent = {
+                    WithConstraints {
+                        val density = AmbientDensity.current
+                        val width = with(density) { constraints.maxWidth.toDp() - it.start - it.end }
+                            .takeIf { it.value >= 0 } ?: 0.dp
+                        val height = with(density) { constraints.maxHeight.toDp() - it.top - it.bottom }
+                            .takeIf { it.value >= 0 } ?: 0.dp
+
+                        Box(modifier = Modifier.size(width, height)) {
+                            if (tabIsSenderStats.value) {
+                                SenderStatScreen(api)
+                            } else {
+                                FilterScreen(api)
+                            }
+                        }
+                    }
+                }
+            )
         }
     }
+}
+
+
+@Composable
+fun SenderStatScreen(api: IInspectionAPI) {
+    Text("Sender Stats")
+    Scaffold(
+        topBar = {
+            val hasUpdate = api.hasUpdates.collectAsState(false)
+            if (hasUpdate.value) {
+                Column {
+                    Spacer(
+                        modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colors.primary)
+                    )
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            api.calculateSenderStats()
+                        }
+                    ) {
+                        Text(text = "There are new messages. Press to reapply filter.")
+                    }
+                }
+            }
+        },
+        bodyContent = {
+            WithConstraints {
+                val density = AmbientDensity.current
+                val width = with(density) { constraints.maxWidth.toDp() - it.start - it.end }
+                    .takeIf { it.value >= 0 } ?: 0.dp
+                val height = with(density) { constraints.maxHeight.toDp() - it.top - it.bottom }
+                    .takeIf { it.value >= 0 } ?: 0.dp
+
+                val senderStats = api.senderStatsStateFlow.collectAsState(emptyList())
+
+                remember {
+                    api.calculateSenderStats()
+                }
+
+                Box(modifier = Modifier.size(width, height)) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth()
+                        ) {
+                            Text(
+                                modifier = Modifier.fillMaxWidth(0.6f),
+                                text = "Author:"
+                            )
+                            Text(text = "Count:")
+                        }
+                        LazyColumnFor(
+                            items = senderStats.value
+                        ) {
+                            Card(
+                                modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth()
+                                ) {
+                                    Text(
+                                        modifier = Modifier.fillMaxWidth(0.6f),
+                                        text = it.author.toDisplayString()
+                                    )
+                                    Text(text = it.messageCount.toString())
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        },
+
+        )
 }
 
 @ExperimentalKeyInput
@@ -105,8 +238,7 @@ fun FilterScreen(api: IInspectionAPI) {
                 }
             }
         },
-
-        )
+    )
 }
 
 
@@ -126,7 +258,7 @@ fun FilterForm(
             author = toggleValue.value,
             startDateTime = startValue.parseDateTime(),
             endDateTime = endValue.parseDateTime()
-        ).also{
+        ).also {
             setFilter.invoke(it, false)
         }
 
@@ -136,9 +268,10 @@ fun FilterForm(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth()
     ) {
-        Column(modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-            .fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .fillMaxWidth()
         ) {
             val toggleState = remember { mutableStateOf(false) }
             Text("Filter Messages")
