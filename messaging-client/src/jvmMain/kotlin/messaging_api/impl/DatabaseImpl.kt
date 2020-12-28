@@ -1,27 +1,35 @@
 package messaging_api.impl
 
 import com.google.gson.Gson
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import messaging_api.IMessagingAPI
-import messaging_api.LettuceHandler
-import messaging_api.Message
-import messaging_api.MongoHandler
-import java.io.Closeable
+import messaging_api.*
 
 
-object DatabaseImpl : IMessagingAPI, Closeable {
+object DatabaseImpl : IInspectionAPI {
 
     private val redisHandler = LettuceHandler()
     private val mongoHandler = MongoHandler()
 
     private val internalMessageStateFlow = MutableStateFlow<List<Message>>(listOf())
+    private val internalAuthorsStateFlow = MutableStateFlow<List<Author>>(listOf())
 
     override val messagesStateFlow: StateFlow<List<Message>>
         get() = internalMessageStateFlow
+    override val authorsStateFlow: StateFlow<List<Author>>
+        get() = internalAuthorsStateFlow
 
     init {
+        GlobalScope.launch {
+            internalMessageStateFlow.collect {
+                internalAuthorsStateFlow.emit(extractUsers(it))
+                internalHasUpdatesStateFlow.emit(true)
+            }
+        }
         runBlocking {
             val hist = mongoHandler.getHistory()
             val l = listOf(
@@ -40,6 +48,12 @@ object DatabaseImpl : IMessagingAPI, Closeable {
         )
     }
 
+    private fun extractUsers(msgs: List<Message>): List<Author> {
+        val map = mutableMapOf<String, Author>()
+        map.putAll(msgs.map { it.author.email to it.author })
+        return map.values.toList()
+    }
+
     override suspend fun sendMessage(msg: Message) {
         redisHandler.sendMessage(msg)
         mongoHandler.pushMessage(msg)
@@ -47,6 +61,21 @@ object DatabaseImpl : IMessagingAPI, Closeable {
 
     override fun close() {
         redisHandler.close()
+    }
+
+    private val internalFilteredMessageStateFlow = MutableStateFlow<List<Message>>(listOf())
+    private val internalHasUpdatesStateFlow = MutableStateFlow(false)
+
+    override val filteredMessagesStateFlow: StateFlow<List<Message>>
+        get() = internalFilteredMessageStateFlow
+    override val hasUpdates: StateFlow<Boolean>
+        get() = internalHasUpdatesStateFlow
+
+    override suspend fun applyFilter(filter: MessageFilter) {
+        println("Apply Filter")
+        val list = mongoHandler.filterMessages(filter)
+        internalFilteredMessageStateFlow.emit(list)
+        internalHasUpdatesStateFlow.emit(false)
     }
 
 

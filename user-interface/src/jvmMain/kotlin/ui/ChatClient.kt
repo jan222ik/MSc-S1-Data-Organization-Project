@@ -6,6 +6,7 @@ import androidx.compose.desktop.AppWindow
 import androidx.compose.desktop.AppWindowAmbient
 import androidx.compose.desktop.Window
 import androidx.compose.foundation.ScrollableColumn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRowFor
@@ -14,16 +15,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.WithConstraints
 import androidx.compose.ui.platform.AmbientDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.GlobalScope
@@ -31,9 +35,17 @@ import kotlinx.coroutines.launch
 import messaging_api.Author
 import messaging_api.IMessagingAPI
 import messaging_api.Message
+import messaging_api.MessageFilter
 import messaging_api.impl.DatabaseImpl
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+
+val darkColors = darkColors(
+    background = Color(0xFF202A41),
+    primary = Color(0xFFFF4088),
+    surface = Color(0xFF1B2439),
+)
 
 @OptIn(ExperimentalKeyInput::class)
 fun main(args: Array<String>) {
@@ -57,18 +69,10 @@ fun main(args: Array<String>) {
         }
         val messages = api.messagesStateFlow.collectAsState(emptyList())
 
-        val userInConversation = remember(messages.value) {
-            val map = mutableMapOf<String, Author>()
-            map.putAll(messages.value.map { it.author.email to it.author })
-            mutableStateListOf(*map.values.toTypedArray())
-        }
+        val userInConversation = api.authorsStateFlow.collectAsState(emptyList())
 
         MaterialTheme(
-            colors = darkColors(
-                background = Color(0xFF202A41),
-                primary = Color(0xFFFF4088),
-                surface = Color(0xFF1B2439),
-            )
+            colors = darkColors
         ) {
             Scaffold(
                 topBar = {
@@ -78,8 +82,7 @@ fun main(args: Array<String>) {
                         setAuthorDetails = { name, email ->
                             setClientName(name)
                             setClientEMail(email)
-                        },
-                        usernames = userInConversation
+                        }
                     )
                 },
                 bodyContent = {
@@ -100,26 +103,46 @@ fun main(args: Array<String>) {
                     }
                 },
                 bottomBar = {
-                    ComposeMessageBar(
-                        onSendClicked = {
-                            if (it.isNotEmpty()) {
-                                val newMsg = Message(
-                                    content = it,
-                                    timestamp = LocalDateTime.now(),
-                                    author = Author(clientName, clientEMail)
-                                )
-                                GlobalScope.launch {
-                                    api.sendMessage(newMsg)
+                    val (isEditName, _) = remember(clientName) { mutableStateOf(clientName.isEmpty()) }
+                    if (isEditName) {
+                        SelectOrEnterUser(
+                            clientName = clientName,
+                            clientEMail = clientEMail,
+                            setAuthorDetails = { name, email ->
+                                setClientName(name)
+                                setClientEMail(email)
+                            },
+                            usernames = userInConversation.value
+                        )
+                    } else {
+                        ComposeMessageBar(
+                            onSendClicked = {
+                                if (it.isNotEmpty()) {
+                                    val newMsg = Message(
+                                        content = it,
+                                        timestamp = LocalDateTime.now(),
+                                        author = Author(clientName, clientEMail)
+                                    )
+                                    GlobalScope.launch {
+                                        api.sendMessage(newMsg)
+                                    }
                                 }
-                            }
-                            true
-                        },
-                        hasClientName = clientName.isNotEmpty()
-                    )
+                                true
+                            },
+                            hasClientName = clientName.isNotEmpty()
+                        )
+                    }
                 }
             )
         }
     }
+}
+
+fun String.parseDateTime(): LocalDateTime? = try {
+    LocalDateTime.parse(this, dateTimeFormatter)
+} catch (e: DateTimeParseException) {
+    println(e)
+    null
 }
 
 
@@ -129,12 +152,74 @@ fun ClientTopBar(
     clientName: String,
     clientEMail: String,
     setAuthorDetails: (String, String) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            val (hasAuthor, _) = remember(clientName) { mutableStateOf(clientName.isNotEmpty()) }
+            if (hasAuthor) {
+                Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
+                    Text(
+                        modifier = Modifier
+                            .padding(start = 16.dp)
+                            .align(Alignment.CenterStart),
+                        text = "Client Name: $clientName [$clientEMail]"
+                    )
+                    Icon(
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .align(Alignment.CenterEnd)
+                            .clickable {
+                                setAuthorDetails.invoke("", "")
+                            },
+                        imageVector = Icons.Filled.ExitToApp
+                    )
+                }
+                Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colors.primary))
+            }
+            val appWindow = AppWindowAmbient.current
+            val inspectorOpen = remember { mutableStateOf(false) }
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    println(appWindow)
+                    val offset = appWindow?.let {
+                        IntOffset(
+                            x = appWindow.x + appWindow.width,
+                            y = appWindow.y
+                        )
+                    }
+                    ChatInspector(
+                        location = offset,
+                        onClose = {
+                            inspectorOpen.value = false
+                        }
+                    )
+                    inspectorOpen.value = true
+                },
+                enabled = inspectorOpen.value.not()
+            ) {
+                Text(text = "Open ChatInspector".takeUnless { inspectorOpen.value } ?: "ChatInspector opened in other window.")
+            }
+        }
+    }
+}
+
+
+@ExperimentalKeyInput
+@Composable
+fun SelectOrEnterUser(
+    clientName: String,
+    clientEMail: String,
+    setAuthorDetails: (String, String) -> Unit,
     usernames: List<Author>
 ) {
     val (isEditName, _) = remember(clientName) { mutableStateOf(clientName.isEmpty()) }
     val (inputNameValue, setInputNameValue) = remember(clientName) { mutableStateOf(clientName) }
     val (inputEMailValue, setInputEMailValue) = remember(clientEMail) { mutableStateOf(clientEMail) }
-
     Card(
         modifier = Modifier
             .padding(start = 16.dp, end = 16.dp, top = 16.dp)
@@ -165,24 +250,6 @@ fun ClientTopBar(
                                 onApply = {
                                     setAuthorDetails.invoke(inputNameValue, inputEMailValue)
                                 }
-                            )
-                        }
-                    } else {
-                        Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
-                            Text(
-                                modifier = Modifier
-                                    .padding(start = 16.dp)
-                                    .align(Alignment.CenterStart),
-                                text = "Client Name: $clientName [$clientEMail]"
-                            )
-                            Icon(
-                                modifier = Modifier
-                                    .padding(end = 16.dp)
-                                    .align(Alignment.CenterEnd)
-                                    .clickable {
-                                        setAuthorDetails.invoke("", "")
-                                    },
-                                imageVector = Icons.Filled.ExitToApp
                             )
                         }
                     }
@@ -220,7 +287,7 @@ fun EnterText(
     value: String,
     onValueChange: (String) -> Unit,
     placeholderString: String,
-    onApply: () -> Unit
+    onApply: (() -> Unit)?
 ) {
     TextField(
         modifier = Modifier
@@ -228,7 +295,7 @@ fun EnterText(
             .shortcuts {
                 on(
                     key = Key.Enter,
-                    callback = { onApply.invoke() }
+                    callback = { onApply?.invoke() }
                 )
             },
         value = value,
@@ -241,12 +308,14 @@ fun EnterText(
         },
         backgroundColor = Color.Transparent,
         trailingIcon = {
-            Icon(
-                modifier = Modifier.clickable {
-                   onApply.invoke()
-                },
-                imageVector = Icons.Filled.Check
-            )
+            onApply?.let {
+                Icon(
+                    modifier = Modifier.clickable {
+                        onApply.invoke()
+                    },
+                    imageVector = Icons.Filled.Check
+                )
+            }
         }
     )
 }
@@ -307,8 +376,9 @@ fun MessageList(msgs: List<Message>, clientEMail: String, forceDateTimeDisplay: 
         scrollState.scrollTo(scrollState.maxValue)
     }
     ScrollableColumn(
+        modifier = Modifier.fillMaxSize(),
         scrollState = scrollState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 0.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
     ) {
         for (msg in msgs) {
             DisplayMessage(
@@ -322,8 +392,9 @@ fun MessageList(msgs: List<Message>, clientEMail: String, forceDateTimeDisplay: 
     }
 }
 
+val dateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yy.MM.dd HH:mm:ss")
 val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
-val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("hh:mm")
+val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
 fun DisplayMessage(
@@ -347,7 +418,7 @@ fun DisplayMessage(
                         setShowDate.invoke(!showDate)
                     }
                 ),
-            backgroundColor = if (thisClientAuthor) MaterialTheme.colors.primary else MaterialTheme.colors.surface,
+            backgroundColor = if (thisClientAuthor) Color(0xFFE33E7F) else MaterialTheme.colors.surface,
             elevation = 0.dp,
             shape = RoundedCornerShape(
                 topLeft = 15.dp,
@@ -363,10 +434,9 @@ fun DisplayMessage(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (showAuthorName) {
-                            val (name, email) = msg.author
                             Text(
                                 modifier = Modifier.align(Alignment.CenterStart),
-                                text = "$name [$email]",
+                                text = msg.author.toDisplayString(),
                                 style = MaterialTheme.typography.caption,
                                 textAlign = TextAlign.Center
                             )
@@ -391,4 +461,8 @@ fun DisplayMessage(
     }
 }
 
+
+
 fun Message.isThisClientAuthor(clientEMail: String) = author.email == clientEMail
+
+fun Author.toDisplayString() = "$name [$email]"
