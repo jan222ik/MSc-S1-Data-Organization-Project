@@ -1,5 +1,6 @@
 package messaging_api.impl
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,13 +46,15 @@ object DemoMsg : IMessagingAPI {
     override val authorsStateFlow: StateFlow<List<Author>>
         get() = internalAuthorStateFlow
 
-    override suspend fun sendMessage(msg: Message) {
+    override fun sendMessage(msg: Message) {
         val l = listOf(*internalMessagesStateFlow.value.toTypedArray(), msg)
-        internalMessagesStateFlow.emit(l)
+        GlobalScope.launch(Dispatchers.IO) {
+            internalMessagesStateFlow.emit(l)
+        }
     }
 
     init {
-        GlobalScope.launch {
+        GlobalScope.launch(Dispatchers.IO) {
             internalMessagesStateFlow.collect {
                 internalAuthorStateFlow.emit(
                     extractUsers(it)

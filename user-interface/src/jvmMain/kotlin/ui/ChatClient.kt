@@ -146,9 +146,7 @@ fun main(args: Array<String>) {
                                         timestamp = LocalDateTime.now(),
                                         author = Author(clientName, clientEMail)
                                     )
-                                    GlobalScope.launch {
-                                        api.sendMessage(newMsg)
-                                    }
+                                    api.sendMessage(newMsg)
                                 }
                                 true
                             },

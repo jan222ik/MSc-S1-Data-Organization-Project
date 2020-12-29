@@ -1,9 +1,12 @@
 package messaging_api
 
+import com.mongodb.client.model.InsertManyOptions
+import com.mongodb.client.result.InsertManyResult
 import org.bson.conversions.Bson
 import org.litote.kmongo.and
 import org.litote.kmongo.coroutine.CoroutineClient
 import org.litote.kmongo.coroutine.CoroutineCollection
+import org.litote.kmongo.coroutine.CoroutineMapReducePublisher
 import org.litote.kmongo.coroutine.coroutine
 import org.litote.kmongo.div
 import org.litote.kmongo.eq
@@ -17,10 +20,12 @@ class MongoHandler : Closeable {
 
     private val client: CoroutineClient = KMongo.createClient().coroutine
     private val messageHistoryCol: CoroutineCollection<Message>
+    private val senderStatCol: CoroutineCollection<SenderStat>
 
     init {
         val database = client.getDatabase("messagehistory")
         messageHistoryCol = database.getCollection("messages")
+        senderStatCol = database.getCollection("senderstats")
     }
 
     suspend fun getHistory(): List<Message> = messageHistoryCol.find().toList().sortedBy { it.timestamp }
@@ -50,7 +55,7 @@ class MongoHandler : Closeable {
     suspend fun pushMessage(msg: Message) = messageHistoryCol.insertOne(msg)
 
     suspend fun calculateSenderStats(): List<SenderStat> {
-        return messageHistoryCol.mapReduce<SenderStat>(
+        val mapReduce: CoroutineMapReducePublisher<SenderStat> = messageHistoryCol.mapReduce<SenderStat>(
             """
                 function() {
                     emit(this.author, 1);
@@ -61,7 +66,12 @@ class MongoHandler : Closeable {
                     return contents.length;
                 };
             """
-        ).toList()
+        )
+        senderStatCol.drop()
+        senderStatCol.insertMany(
+            documents = mapReduce.toList()
+        )
+        return senderStatCol.find().toList()
     }
 
 

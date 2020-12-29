@@ -86,9 +86,8 @@ object DatabaseImpl : IInspectionAPI {
         return map.values.toList()
     }
 
-    override suspend fun sendMessage(msg: Message) {
+    override fun sendMessage(msg: Message) {
         redisHandler.sendMessage(msg)
-        mongoHandler.pushMessage(msg)
     }
 
     override suspend fun applyFilter(filter: MessageFilter) {
