@@ -15,7 +15,7 @@ fun main() {
     val incThree: RedisFuture<Long> = async.incr("inc")
     val exec: RedisFuture<TransactionResult> = async.exec()
     // TODO left unused vals in for type information, can be replaced by function calls without assignment
-    println(exec.get().forEach(::println))
+    exec.get().forEach(::println)
     client.shutdown()
 }
 
