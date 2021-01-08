@@ -2,6 +2,7 @@ package messaging_api
 
 import com.mongodb.client.model.InsertManyOptions
 import com.mongodb.client.result.InsertManyResult
+import kotlinx.coroutines.runBlocking
 import org.bson.conversions.Bson
 import org.litote.kmongo.and
 import org.litote.kmongo.coroutine.CoroutineClient
@@ -55,23 +56,27 @@ class MongoHandler : Closeable {
     suspend fun pushMessage(msg: Message) = messageHistoryCol.insertOne(msg)
 
     suspend fun calculateSenderStats(): List<SenderStat> {
-        val mapReduce: CoroutineMapReducePublisher<SenderStat> = messageHistoryCol.mapReduce<SenderStat>(
-            """
+        senderStatCol.drop()
+        val mapReduce: CoroutineMapReducePublisher<SenderStat> = messageHistoryCol.mapReduce(
+            mapFunction = """
                 function() {
                     emit(this.author, 1);
                 };
             """,
-            """
+            reduceFunction = """
                 function(author, contents) {
                     return contents.length;
                 };
             """
         )
-        senderStatCol.drop()
         senderStatCol.insertMany(
             documents = mapReduce.toList()
         )
         return senderStatCol.find().toList()
+    }
+
+    suspend fun dropDatabase() {
+        messageHistoryCol.drop()
     }
 
 
@@ -90,8 +95,11 @@ suspend fun main() {
         //    println(it)
         //}
 
-        calculateSenderStats().forEach {
-            println(it)
+        //calculateSenderStats().forEach {
+           // println(it)
+       // }
+        runBlocking {
+            dropDatabase()
         }
     }
 }

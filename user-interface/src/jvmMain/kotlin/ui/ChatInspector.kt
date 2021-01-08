@@ -82,11 +82,11 @@ fun ChatInspector(location: IntOffset? = null, onClose: (() -> Unit)? = null) {
                     TabRow(1.takeIf { tabIsSenderStats.value } ?: 0) {
                         Tab(
                             selected = tabIsSenderStats.value.not(),
-                            content = { Text("Filter Messages") },
+                            content = { Text(modifier = Modifier.padding(vertical = 4.dp), text = "Filter Messages") },
                             onClick = { tabIsSenderStats.value = false })
                         Tab(
                             selected = tabIsSenderStats.value,
-                            content = { Text("Sender Stats") },
+                            content = { Text(modifier = Modifier.padding(vertical = 4.dp), text = "Sender Stats") },
                             onClick = { tabIsSenderStats.value = true })
                     }
                 },
@@ -325,7 +325,7 @@ fun FilterForm(
             }
             Column {
                 Text("Time Interval")
-                val placeholderString = "Enter Date (yyyy.MM.dd HH:mm:ss)"
+                val placeholderString = "Enter Date (yy.MM.dd HH:mm:ss)"
                 Row {
                     Text("Start")
                     EnterText(

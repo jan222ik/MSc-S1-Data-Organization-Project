@@ -1,8 +1,8 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="StartAll" type="CompoundRunConfigurationType">
-    <toRun name="PushToHistoryClientKt" type="Application" />
-    <toRun name="ChatClientKt2" type="Application" />
     <toRun name="ChatClientKt" type="Application" />
+    <toRun name="ChatClientKt2" type="Application" />
+    <toRun name="PushToHistoryClientKt" type="Application" />
     <method v="2" />
   </configuration>
 </component>

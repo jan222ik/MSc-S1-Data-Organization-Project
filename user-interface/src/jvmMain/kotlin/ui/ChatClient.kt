@@ -160,7 +160,7 @@ fun main(args: Array<String>) {
 }
 
 fun String.parseDateTime(): LocalDateTime? = try {
-    LocalDateTime.parse(this, dateTimeFormatter)
+    LocalDateTime.parse(this, dateTimeFormatter).apply {  println("parsed = $this , original = ${this@parseDateTime}") }
 } catch (e: DateTimeParseException) {
     println(e)
     null
