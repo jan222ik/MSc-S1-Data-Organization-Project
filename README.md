@@ -1,9 +1,9 @@
 # MSc-S1-Data-Organization-Project
 
-###Semester Project of Data Organization 
+### Semester Project of Data Organization 
 (LV 024912010701: FTM-INF-VZ WS20-Sem1)
 
-###How to Launch
+### How to Launch
 1. Gradle Build
 2. Start Virtual Box with Redis and MongoDB.
 3. Launch Chat Client or PushToHistory Client 
