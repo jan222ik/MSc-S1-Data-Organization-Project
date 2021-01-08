@@ -1,6 +1,6 @@
 # MSc-S1-Data-Organization-Project
 
-### Semester Project of Data Organization 
+### Semester Project of Data Organization Course
 (LV 024912010701: FTM-INF-VZ WS20-Sem1)
 
 ### How to Launch
