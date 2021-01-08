@@ -36,6 +36,9 @@ val history = listOf(
     )
 )
 
+/**
+ * Old Demo Msg for building the UI.
+ */
 object DemoMsg : IMessagingAPI {
     private val internalMessagesStateFlow = MutableStateFlow(history)
     private val internalAuthorStateFlow = MutableStateFlow(authors)

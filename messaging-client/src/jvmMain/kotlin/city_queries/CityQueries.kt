@@ -9,15 +9,19 @@ import org.litote.kmongo.or
 import org.litote.kmongo.reactivestreams.KMongo
 import org.litote.kmongo.regex
 
+/**
+ * Activity exercise mongodb.
+ */
 fun main() {
+    // Create client
     val client: CoroutineClient = KMongo.createClient().coroutine
-
+    // Get database test with town collection in it
     val database = client.getDatabase("test")
+    // Get town collection
     val towns = database.getCollection<Town>("towns")
 
-    //– Select a town via a case-insensitive regular expression containing the string vie.
-
     runBlocking {
+        //– Select a town via a case-insensitive regular expression containing the string vie.
         towns.aggregate<Town>(
             listOf(
                 match(Town::name regex ".*vie.*".toRegex(RegexOption.IGNORE_CASE))
@@ -39,6 +43,7 @@ fun main() {
 
 }
 
-data class Town(val name: String, val famous_for: List<String>) {
-
-}
+/**
+ * Defines params for a subset of towns collections fields.
+ */
+data class Town(val name: String, val famous_for: List<String>)

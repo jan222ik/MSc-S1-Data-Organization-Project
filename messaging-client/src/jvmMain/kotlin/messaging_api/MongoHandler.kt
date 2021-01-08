@@ -1,6 +1,5 @@
 package messaging_api
 
-import kotlinx.coroutines.runBlocking
 import org.bson.conversions.Bson
 import org.litote.kmongo.and
 import org.litote.kmongo.coroutine.CoroutineClient
@@ -17,18 +16,30 @@ import java.io.Closeable
 
 class MongoHandler : Closeable {
 
-    private val client: CoroutineClient = KMongo.createClient().coroutine
+    private val client: CoroutineClient
     private val messageHistoryCol: CoroutineCollection<Message>
     private val senderStatCol: CoroutineCollection<SenderStat>
 
     init {
+        // Create a client with coroutine functionality.
+        client = KMongo.createClient().coroutine
+        // Get Database with the name messagehistory.
         val database = client.getDatabase("messagehistory")
+        // Initialize coroutine collection messages & senderstats
         messageHistoryCol = database.getCollection("messages")
         senderStatCol = database.getCollection("senderstats")
     }
 
+    /**
+     * Retrieve Message History asynchronously from collection.
+     * @return List of messages sorted by their timestamp ascending
+     */
     suspend fun getHistory(): List<Message> = messageHistoryCol.find().toList().sortedBy { it.timestamp }
 
+    /**
+     * Filters messages based on the provided filter.
+     * If a param of the filter class is null it is ignored in the query.
+     */
     suspend fun filterMessages(filter: MessageFilter?): List<Message> {
         val pipeline = mutableListOf<Bson>()
         filter?.apply {
@@ -51,10 +62,20 @@ class MongoHandler : Closeable {
         return messageHistoryCol.aggregate<Message>(pipeline).toList()
     }
 
+    /**
+     * Adds a message to the collection 'messagehistory'.
+     * @param msg Message to add
+     * @return InsertOneResult
+     */
     suspend fun pushMessage(msg: Message) = messageHistoryCol.insertOne(msg)
 
+    /**
+     * Triggers recalculation and repopulation of the 'senderstats' collection.
+     */
     suspend fun calculateSenderStats(): List<SenderStat> {
+        // Drop collection to delete old results
         senderStatCol.drop()
+        // MapReduce Call
         val mapReduce: CoroutineMapReducePublisher<SenderStat> = messageHistoryCol.mapReduce(
             mapFunction = """
                 function() {
@@ -67,13 +88,18 @@ class MongoHandler : Closeable {
                 };
             """
         )
+        // Inset Results into 'senderstats' collections
         senderStatCol.insertMany(
             documents = mapReduce.toList()
         )
+        // Query all SenderStat from newly populated collection
         return senderStatCol.find().toList()
     }
 
-    suspend fun dropDatabase() {
+    /**
+     * Drops the 'messagehistory' collection.
+     */
+    suspend fun dropMessageHistory() {
         messageHistoryCol.drop()
     }
 
@@ -84,20 +110,9 @@ class MongoHandler : Closeable {
 
 }
 
+/**
+ * Entrypoint to drop message history collection.
+ */
 suspend fun main() {
-    MongoHandler().apply {
-
-        //pushMessage(Message("test", LocalDateTime.now(), Author("Janik", "@@@@")))
-        //delay(2000)
-        //getHistory().forEach {
-        //    println(it)
-        //}
-
-        //calculateSenderStats().forEach {
-        // println(it)
-        // }
-        runBlocking {
-            dropDatabase()
-        }
-    }
+    MongoHandler().dropMessageHistory()
 }

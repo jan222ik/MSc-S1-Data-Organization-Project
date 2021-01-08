@@ -3,7 +3,7 @@ package messaging_api
 import com.google.gson.Gson
 
 /**
- * Client that pushes messages from Redis message subscriber to MongoDB.
+ * Entrypoint to Client that pushes messages from Redis message subscriber to MongoDB.
  */
 fun main() {
     val redisHandler = LettuceHandler()

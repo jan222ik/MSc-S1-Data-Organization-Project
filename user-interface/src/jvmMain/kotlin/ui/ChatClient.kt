@@ -70,6 +70,9 @@ val darkColors = darkColors(
     surface = Color(0xFF1B2439),
 )
 
+/**
+ * Entrypoint for the ChatClient UI.
+ */
 @OptIn(ExperimentalKeyInput::class)
 fun main(args: Array<String>) {
     Window(

@@ -51,6 +51,9 @@ import messaging_api.impl.DatabaseImpl
 import messaging_api.messageCount
 
 
+/**
+ * Entrypoint for the standalone ChatInspector UI.
+ */
 @OptIn(ExperimentalKeyInput::class)
 fun main() {
     ChatInspector()

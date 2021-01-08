@@ -22,27 +22,28 @@ object DatabaseImpl : IInspectionAPI {
     private val redisHandler = LettuceHandler()
     private val mongoHandler = MongoHandler()
 
-    // Flow of all Messages.
+    // Hot Flow of all Messages.
     private val internalMessageStateFlow = MutableStateFlow<List<Message>>(emptyList())
     override val messagesStateFlow: StateFlow<List<Message>>
         get() = internalMessageStateFlow
 
-    // Flow of all Authors that composed at least one Message.
+    // Hot Flow of all Authors that composed at least one Message.
     private val internalAuthorsStateFlow = MutableStateFlow<List<Author>>(emptyList())
     override val authorsStateFlow: StateFlow<List<Author>>
         get() = internalAuthorsStateFlow
 
-    // Flow of all Messages satisfying the applied Filter.
+    // Hot Flow of all Messages satisfying the applied Filter.
     private val internalFilteredMessageStateFlow = MutableStateFlow<List<Message>>(emptyList())
     override val filteredMessagesStateFlow: StateFlow<List<Message>>
         get() = internalFilteredMessageStateFlow
 
-    // Flow of the latest mapReduce of SenderStats.
+    // Hot Flow of the latest mapReduce of SenderStats.
     private val internalSenderStatStateFlow = MutableStateFlow<List<SenderStat>>(emptyList())
     override val senderStatsStateFlow: StateFlow<List<SenderStat>>
         get() = internalSenderStatStateFlow
 
-    // Flow that indicates that there are new Messages not considered by the inspector use-cases FilteredMessages or SenderStat.
+    // Hot Flow that indicates that there are new Messages not considered
+    //          by the inspector use-cases FilteredMessages or SenderStat.
     private val internalHasUpdatesStateFlow = MutableStateFlow(false)
     override val hasUpdates: StateFlow<Boolean>
         get() = internalHasUpdatesStateFlow
@@ -58,14 +59,14 @@ object DatabaseImpl : IInspectionAPI {
             }
         }
         runBlocking {
-            // Block Main Thread to avoid Concurrency Problems (Race Conditions).
-            //       - Should be implemented in a different way in production.
+            // Block Thread to avoid Concurrency Problems (Race Conditions).
+            // If not blocking redis could provide a new message before the history is loaded.
 
             // Get History from MongoDB.
             val hist = mongoHandler.getHistory()
             val messageList = listOf(
                 *hist.toTypedArray(),
-                *internalMessageStateFlow.value.toTypedArray() // TODO Needed ?
+                *internalMessageStateFlow.value.toTypedArray()
             )
             // Update Message StateFlow.
             internalMessageStateFlow.emit(messageList)
@@ -81,6 +82,7 @@ object DatabaseImpl : IInspectionAPI {
     }
 
     private fun extractUsers(msgs: List<Message>): List<Author> {
+        // Extracts all Authors whose email is unique.
         val map = mutableMapOf<String, Author>()
         map.putAll(msgs.map { it.author.email to it.author })
         return map.values.toList()
