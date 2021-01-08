@@ -1,7 +1,5 @@
 package messaging_api
 
-import com.mongodb.client.model.InsertManyOptions
-import com.mongodb.client.result.InsertManyResult
 import kotlinx.coroutines.runBlocking
 import org.bson.conversions.Bson
 import org.litote.kmongo.and
@@ -96,8 +94,8 @@ suspend fun main() {
         //}
 
         //calculateSenderStats().forEach {
-           // println(it)
-       // }
+        // println(it)
+        // }
         runBlocking {
             dropDatabase()
         }
